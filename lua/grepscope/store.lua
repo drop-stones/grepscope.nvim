@@ -8,19 +8,19 @@ local function store_dir()
   return vim.fn.stdpath("data") .. "/grepscope"
 end
 
---- Get the storage file path for a given cwd.
----@param cwd string
+--- Get the storage file path for a given project root.
+---@param root string
 ---@return string
-local function store_path(cwd)
-  local key = project.key(cwd)
+local function store_path(root)
+  local key = project.key(root)
   return store_dir() .. "/" .. key .. ".json"
 end
 
---- Load glob patterns for the given cwd.
----@param cwd string
+--- Load glob patterns for the given project root.
+---@param root string
 ---@return string[]
-function M.load(cwd)
-  local path = store_path(cwd)
+function M.load(root)
+  local path = store_path(root)
   local f = io.open(path, "r")
   if not f then
     return {}
@@ -34,13 +34,13 @@ function M.load(cwd)
   return {}
 end
 
---- Save glob patterns for the given cwd.
----@param cwd string
+--- Save glob patterns for the given project root.
+---@param root string
 ---@param globs string[]
-function M.save(cwd, globs)
+function M.save(root, globs)
   local dir = store_dir()
   vim.fn.mkdir(dir, "p")
-  local path = store_path(cwd)
+  local path = store_path(root)
   local f = io.open(path, "w")
   if not f then
     vim.notify("[grepscope] Failed to write " .. path, vim.log.levels.ERROR)

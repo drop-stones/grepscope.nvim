@@ -1,3 +1,4 @@
+local project = require("grepscope.project")
 local store = require("grepscope.store")
 
 local M = {}
@@ -55,10 +56,10 @@ function M.edit_filter_action(cwd, base_title, globs)
   end
 end
 
---- Resolve the cwd to use for storage.
+--- Resolve the project root for storage.
 ---@return string
-function M.resolve_cwd()
-  return vim.uv.cwd() or "."
+function M.resolve_root()
+  return project.root()
 end
 
 --- snacks picker source config function.
@@ -67,8 +68,8 @@ end
 ---@param opts snacks.picker.Config
 ---@return snacks.picker.Config
 function M.config(opts)
-  local cwd = M.resolve_cwd()
-  local globs = store.load(cwd)
+  local root = M.resolve_root()
+  local globs = store.load(root)
   local base_title = Snacks.picker.util.title(opts.source or "grep")
 
   opts.title = M.title(base_title, globs)
@@ -77,7 +78,7 @@ function M.config(opts)
   end
 
   opts.actions = opts.actions or {}
-  opts.actions.edit_filter = M.edit_filter_action(cwd, base_title, globs)
+  opts.actions.edit_filter = M.edit_filter_action(root, base_title, globs)
 
   return opts
 end

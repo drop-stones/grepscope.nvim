@@ -9,30 +9,47 @@ snacks.nvim grep picker. Equivalent to VSCode's "files to include" field.
 
 - [snacks.nvim](https://github.com/folke/snacks.nvim) (required)
 - Neovim >= 0.10 (for `vim.fs.root()`)
-- No dependency on LazyVim (must work standalone)
+- No dependency on LazyVim or other frameworks
 
 ## Architecture
 
+### Integration Approach
+
+grepscope integrates via snacks' official `config` field in source config
+(`snacks.picker.Config.config`). This is a function called by snacks every time
+a picker opens, allowing dynamic injection of glob patterns. No monkey-patching
+or wrapper functions needed.
+
+The plugin has **no `setup()` function**. All configuration is done by the user
+in their snacks picker source config. This keeps the plugin's responsibility
+minimal and gives users full control.
+
 ### Core Flow
 
-1. User calls `require("grepscope").grep(opts)` or `require("grepscope").grep_word(opts)`
-2. Load saved glob patterns for the current project (keyed by `vim.uv.cwd()`)
-3. Inject patterns into snacks picker's `glob` option
-4. Set picker title to show current patterns (e.g., `Grep [*.ts !*.test.ts]`)
-5. Register `<C-e>` action inside the picker to edit patterns via `vim.ui.input`
-6. On edit confirm: save patterns, update `picker.opts.glob`, update title, call `picker:find()` (NO restart needed)
+1. User opens a grep picker (via `<leader>sg`, dashboard "Find Text", etc.)
+2. snacks calls `require("grepscope").config(opts)` (registered in source config)
+3. grepscope loads saved glob patterns for the current project root
+4. Injects patterns into `opts.glob` and updates `opts.title`
+5. Registers `edit_filter` action for editing patterns via `vim.ui.input`
+6. User presses keybind (configured by user, e.g., `<C-e>`) to edit glob filter
+7. On confirm: save patterns, update glob/title in-place, call `picker:find()` (no restart)
 
 ### Key Design Decisions
 
+- **No `setup()`, no wrapper functions**: The plugin exposes only `require("grepscope").config` — a snacks source config function. Users wire it into `opts.picker.sources.grep.config` in their snacks spec. This covers all grep callers (keymaps, dashboard, etc.) automatically.
+- **Keybinding is the user's responsibility**: grepscope registers the `edit_filter` action, but does not bind any keys. Users set `win.input.keys` in their snacks source config. This avoids default key conflicts (e.g., `<C-g>` conflicts with snacks `toggle_live` and zellij).
 - **No picker restart**: snacks picker supports in-place refresh via `picker.opts.glob` mutation + `picker:find()`. Title is updated via `picker.title` + `picker:update_titles()`.
-- **Two wrapper functions**: `grep()` and `grep_word()` are both needed because `grep_word` has distinct options (`--word-regexp`, `regex=false`, `live=false`, pre-filled search). The glob injection logic is shared internally. `grep_buffers` is out of scope (buffer-only search doesn't benefit from file glob scoping).
-- **Project identification via `vim.uv.cwd()`**: NOT `vim.fs.root()` or `LazyVim.root.get()`. Reason: buffer-based root detection (like `vim.fs.root(0, ...)`) changes when you open files in subprojects (e.g., opening `grepscope.nvim/init.lua` from `~/repos/nvim` would shift root to `grepscope.nvim`). Using `vim.uv.cwd()` is stable across buffer switches and only changes on explicit `:cd` commands. The `project.lua` module only handles key generation (path-to-filesystem-safe-string conversion), not root detection.
-- **`<C-e>` as default key**: `<C-g>` is taken by snacks (`toggle_live`) and may conflict with terminal multiplexers like zellij. `<C-e>` is free in snacks picker input and stands for "edit filter".
+- **`live_grep` is an alias for `grep`** in snacks. Overriding `sources.grep` covers both. Dashboard's "Find Text" (`Snacks.dashboard.pick('live_grep')`) also goes through the same config path.
+- **`grep_buffers` is out of scope**: Buffer-only search doesn't benefit from file glob scoping.
+- **Project root detection**: `vim.fs.root(cwd, markers)` from `vim.uv.cwd()`. NOT buffer-based (`vim.fs.root(0, ...)`), which would change when opening files in subprojects. Falls back to cwd if no markers found.
+- **Base title from `opts.source`**: Always derived via `Snacks.picker.util.title(opts.source)`, never from `opts.title`. This prevents title duplication when snacks calls `config()`.
 
 ### Persistence
 
 - **Path**: `stdpath("data")/grepscope/<project_key>.json`
-- **Project key**: `vim.uv.cwd()` with path separators replaced by `%` to be filesystem-safe
+- **Project key**: Project root path with path separators replaced by `%`
+- **Project root**: `vim.fs.root(vim.uv.cwd(), markers)` with fallback to cwd
+- **Root markers**: `.git`, `.hg`, `package.json`, `Cargo.toml`, `go.mod`, `Makefile`
 - **Format**: `{ "globs": ["*.ts", "!*.test.ts"] }`
 
 ### Pattern Format
@@ -41,52 +58,11 @@ snacks.nvim grep picker. Equivalent to VSCode's "files to include" field.
 - `!` prefix for exclude (passed as `-g !pattern` to rg via snacks)
 - Stored as string array internally
 
-### Picker Integration (snacks internals)
-
-Glob injection: snacks passes each element of `opts.glob` as `-g <pattern>` to rg.
-See: `snacks.nvim/lua/snacks/picker/source/grep.lua` lines 62-67.
-
-Custom action registration via `actions` + `win.input.keys`:
-```lua
-Snacks.picker.grep({
-  title = "Grep [*.ts]",
-  glob = { "*.ts" },
-  actions = {
-    edit_filter = function(picker) ... end,
-  },
-  win = {
-    input = {
-      keys = {
-        ["<C-e>"] = { "edit_filter", mode = { "i", "n" } },
-      },
-    },
-  },
-})
-```
-
-### Setup Options
-
-```lua
-require("grepscope").setup({
-  key = "<C-e>",         -- Keybinding to edit glob filter inside picker
-  root_markers = {       -- Markers for project root detection (currently unused, reserved)
-    ".git",
-    "package.json",
-    "Cargo.toml",
-    "go.mod",
-    "Makefile",
-    ".hg",
-  },
-})
-```
-
 ### Public API
 
 | Function | Description |
 |---|---|
-| `require("grepscope").setup(opts)` | Configure the plugin |
-| `require("grepscope").grep(opts)` | Wrapper around `Snacks.picker.grep()` with glob injection |
-| `require("grepscope").grep_word(opts)` | Wrapper around `Snacks.picker.grep_word()` with glob injection |
+| `require("grepscope").config(opts)` | snacks source config function. Set as `config` field in `opts.picker.sources.grep` |
 
 ### File Structure
 
@@ -94,31 +70,61 @@ require("grepscope").setup({
 grepscope.nvim/
 ├── lua/
 │   └── grepscope/
-│       ├── init.lua       -- setup() and public API (grep, grep_word)
-│       ├── config.lua     -- Default config, merged with user opts
-│       ├── store.lua      -- Persistence: read/write JSON (takes cwd as argument)
-│       ├── project.lua    -- Path-to-key conversion (filesystem-safe)
-│       └── picker.lua     -- Snacks picker integration (glob injection, action, title, cwd resolution)
+│       ├── init.lua       -- Public API: config()
+│       ├── picker.lua     -- Source config function, title, edit_filter action
+│       ├── project.lua    -- Project root detection + path-to-key conversion
+│       └── store.lua      -- Persistence: read/write JSON
 ├── CLAUDE.md
 └── LICENSE
 ```
 
-## User's nvim-config Integration
+### snacks Internals Reference
 
-Config location: `~/.config/nvim-config/lua/plugins/picker/grepscope.lua`
-Uses `dir = "~/repos/nvim/grepscope.nvim"` for local development.
+Glob injection: snacks passes each element of `opts.glob` as `-g <pattern>` to rg.
+See: `snacks.nvim/lua/snacks/picker/source/grep.lua`.
 
-LazyVim grep keymaps overridden:
-- `<leader>/` → `grepscope.grep()`
-- `<leader>sg` / `<leader>sG` → `grepscope.grep()` (root / cwd)
-- `<leader>sw` / `<leader>sW` → `grepscope.grep_word()` (root / cwd)
+Source config `config` field: `fun(opts: snacks.picker.Config): snacks.picker.Config?`
+Called after all config layers are merged, once per picker open.
+See: `snacks.nvim/lua/snacks/picker/config/init.lua` (`M.get()`).
 
-Dashboard "Find Text" (`g` key) is NOT yet overridden — it still calls `Snacks.dashboard.pick('live_grep')` directly. Future work: consider overriding snacks source config to inject globs at the source level.
+Config merge order: `defaults` → `user global` → `source-specific` → `per-call opts` → `config()` functions.
 
-## Future Considerations
+## User Config Example (lazy.nvim)
 
-- **Snacks source-level override**: Instead of wrapper functions, override `grep`/`grep_word`/`live_grep` source configs in snacks directly. This would cover dashboard and any other caller automatically.
-- **Tests**: Add unit tests for `store`, `project.key()`, `picker.parse_globs()`, `picker.title()`.
+```lua
+-- lua/plugins/picker/grepscope.lua
+local grepscope_config = function(opts)
+  return require("grepscope").config(opts)
+end
+
+local grepscope_keys = {
+  ["<C-e>"] = { "edit_filter", mode = { "i", "n" } },
+}
+
+return {
+  {
+    "drop-stones/grepscope.nvim",
+    dir = "~/repos/nvim/grepscope.nvim",  -- for local dev
+  },
+  {
+    "folke/snacks.nvim",
+    dependencies = { "drop-stones/grepscope.nvim" },
+    opts = {
+      picker = {
+        sources = {
+          grep = { config = grepscope_config, win = { input = { keys = grepscope_keys } } },
+          grep_word = { config = grepscope_config, win = { input = { keys = grepscope_keys } } },
+        },
+      },
+    },
+  },
+}
+```
+
+## TODO
+
+- **Tests**: Unit tests for `store`, `project.root()`, `project.key()`, `picker.parse_globs()`, `picker.title()`
+- **README**: User-facing documentation (install, config examples, how it works)
 
 ## Coding Guidelines
 

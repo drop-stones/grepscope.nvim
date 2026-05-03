@@ -1,4 +1,4 @@
-local config = require("grepscope.config")
+local cfg = require("grepscope.config")
 local store = require("grepscope.store")
 
 local M = {}
@@ -57,31 +57,29 @@ function M.edit_filter_action(cwd, base_title, globs)
 end
 
 --- Resolve the cwd to use for storage.
---- Uses vim.uv.cwd() which is stable across buffer switches
---- and only changes on explicit :cd commands.
 ---@return string
 function M.resolve_cwd()
   return vim.uv.cwd() or "."
 end
 
---- Inject grepscope options into snacks picker opts.
----@param base_title string
----@param opts? table
----@return table
-function M.inject(base_title, opts)
-  opts = opts or {}
+--- snacks picker source config function.
+--- Dynamically injects glob patterns, title, and edit_filter action.
+--- Intended to be set as the `config` field in snacks source config.
+---@param opts snacks.picker.Config
+---@return snacks.picker.Config
+function M.config(opts)
   local cwd = M.resolve_cwd()
   local globs = store.load(cwd)
-  local key = config.values.key
+  local key = cfg.values.key
+  local base_title = Snacks.picker.util.title(opts.source or "grep")
 
   opts.title = M.title(base_title, globs)
   if #globs > 0 then
     opts.glob = globs
   end
 
-  opts.actions = vim.tbl_deep_extend("force", opts.actions or {}, {
-    edit_filter = M.edit_filter_action(cwd, base_title, globs),
-  })
+  opts.actions = opts.actions or {}
+  opts.actions.edit_filter = M.edit_filter_action(cwd, base_title, globs)
 
   opts.win = vim.tbl_deep_extend("force", opts.win or {}, {
     input = {

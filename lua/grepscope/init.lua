@@ -5,18 +5,12 @@ function M.setup(opts)
   require("grepscope.config").setup(opts)
 end
 
----@param opts? table
-function M.grep(opts)
-  local picker = require("grepscope.picker")
-  opts = picker.inject("Grep", opts)
-  Snacks.picker.grep(opts)
-end
-
----@param opts? table
-function M.grep_word(opts)
-  local picker = require("grepscope.picker")
-  opts = picker.inject("Grep Word", opts)
-  Snacks.picker.grep_word(opts)
+--- snacks picker source config function.
+--- Set this as the `config` field in snacks picker source config.
+---@param opts snacks.picker.Config
+---@return snacks.picker.Config
+function M.config(opts)
+  return require("grepscope.picker").config(opts)
 end
 
 return M

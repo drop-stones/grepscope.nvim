@@ -1,4 +1,3 @@
-local cfg = require("grepscope.config")
 local store = require("grepscope.store")
 
 local M = {}
@@ -70,7 +69,6 @@ end
 function M.config(opts)
   local cwd = M.resolve_cwd()
   local globs = store.load(cwd)
-  local key = cfg.values.key
   local base_title = Snacks.picker.util.title(opts.source or "grep")
 
   opts.title = M.title(base_title, globs)
@@ -80,14 +78,6 @@ function M.config(opts)
 
   opts.actions = opts.actions or {}
   opts.actions.edit_filter = M.edit_filter_action(cwd, base_title, globs)
-
-  opts.win = vim.tbl_deep_extend("force", opts.win or {}, {
-    input = {
-      keys = {
-        [key] = { "edit_filter", mode = { "i", "n" } },
-      },
-    },
-  })
 
   return opts
 end

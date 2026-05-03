@@ -1,10 +1,5 @@
 local M = {}
 
----@param opts? grepscope.Config
-function M.setup(opts)
-  require("grepscope.config").setup(opts)
-end
-
 --- snacks picker source config function.
 --- Set this as the `config` field in snacks picker source config.
 ---@param opts snacks.picker.Config

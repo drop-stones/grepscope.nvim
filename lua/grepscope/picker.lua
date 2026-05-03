@@ -1,0 +1,97 @@
+local config = require("grepscope.config")
+local store = require("grepscope.store")
+
+local M = {}
+
+--- Build a title string from the base title and glob patterns.
+---@param base string
+---@param globs string[]
+---@return string
+function M.title(base, globs)
+  if #globs == 0 then
+    return base
+  end
+  return base .. " [" .. table.concat(globs, " ") .. "]"
+end
+
+--- Parse a space-separated glob string into a list.
+---@param input string
+---@return string[]
+function M.parse_globs(input)
+  local globs = {}
+  for g in input:gmatch("%S+") do
+    globs[#globs + 1] = g
+  end
+  return globs
+end
+
+--- Create the edit_filter action for the picker.
+---@param cwd string
+---@param base_title string
+---@param globs string[] current globs (mutable reference)
+---@return fun(picker: any)
+function M.edit_filter_action(cwd, base_title, globs)
+  return function(picker)
+    local initial = table.concat(globs, " ")
+    vim.ui.input({ prompt = "Glob filter: ", default = initial }, function(input)
+      if input == nil then
+        return
+      end
+      local new_globs = M.parse_globs(input)
+
+      -- Update globs in-place
+      for i = #globs, 1, -1 do
+        globs[i] = nil
+      end
+      for i, g in ipairs(new_globs) do
+        globs[i] = g
+      end
+
+      store.save(cwd, new_globs)
+      picker.opts.glob = #new_globs > 0 and new_globs or nil
+      picker.title = M.title(base_title, new_globs)
+      picker:update_titles()
+      picker:find()
+    end)
+  end
+end
+
+--- Resolve the cwd to use for storage.
+--- Uses vim.uv.cwd() which is stable across buffer switches
+--- and only changes on explicit :cd commands.
+---@return string
+function M.resolve_cwd()
+  return vim.uv.cwd() or "."
+end
+
+--- Inject grepscope options into snacks picker opts.
+---@param base_title string
+---@param opts? table
+---@return table
+function M.inject(base_title, opts)
+  opts = opts or {}
+  local cwd = M.resolve_cwd()
+  local globs = store.load(cwd)
+  local key = config.values.key
+
+  opts.title = M.title(base_title, globs)
+  if #globs > 0 then
+    opts.glob = globs
+  end
+
+  opts.actions = vim.tbl_deep_extend("force", opts.actions or {}, {
+    edit_filter = M.edit_filter_action(cwd, base_title, globs),
+  })
+
+  opts.win = vim.tbl_deep_extend("force", opts.win or {}, {
+    input = {
+      keys = {
+        [key] = { "edit_filter", mode = { "i", "n" } },
+      },
+    },
+  })
+
+  return opts
+end
+
+return M

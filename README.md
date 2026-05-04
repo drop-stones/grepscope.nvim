@@ -1,4 +1,4 @@
-# grepscope.nvim
+# 🎯 grepscope.nvim
 
 Project-scoped, persistent glob filters for [snacks.nvim](https://github.com/folke/snacks.nvim) grep picker.
 

@@ -28,7 +28,7 @@ function M.load(root)
   local content = f:read("*a")
   f:close()
   local ok, data = pcall(vim.json.decode, content)
-  if ok and data and data.globs then
+  if ok and data and type(data.globs) == "table" then
     return data.globs
   end
   return {}

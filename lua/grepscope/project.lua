@@ -15,7 +15,7 @@ end
 ---@param path string
 ---@return string
 function M.key(path)
-  local key = path:gsub("[/\\:]+", "%%")
+  local key = path:gsub("%%", "%%%%"):gsub("[/\\:]+", "%%")
   key = key:gsub("^%%+", ""):gsub("%%+$", "")
   return key
 end

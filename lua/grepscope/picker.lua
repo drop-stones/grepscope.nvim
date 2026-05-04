@@ -73,9 +73,7 @@ function M.config(opts)
   local base_title = Snacks.picker.util.title(opts.source or "grep")
 
   opts.title = M.title(base_title, globs)
-  if #globs > 0 then
-    opts.glob = globs
-  end
+  opts.glob = #globs > 0 and globs or nil
 
   opts.actions = opts.actions or {}
   opts.actions.edit_filter = M.edit_filter_action(root, base_title, globs)

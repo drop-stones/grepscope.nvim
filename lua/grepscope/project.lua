@@ -17,7 +17,7 @@ end
 function M.key(path)
   local key = path:gsub("%%", "%%%%"):gsub("[/\\:]+", "%%")
   key = key:gsub("^%%+", ""):gsub("%%+$", "")
-  return key
+  return key ~= "" and key or "root"
 end
 
 return M

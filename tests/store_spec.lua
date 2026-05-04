@@ -65,6 +65,20 @@ T["load"]["handles corrupted JSON gracefully"] = function()
   os.remove(path)
 end
 
+T["load"]["handles non-string elements in globs"] = function()
+  local project = require("grepscope.project")
+  local key = project.key(tmpdir .. "/badelem")
+  local dir = vim.fn.stdpath("data") .. "/grepscope"
+  vim.fn.mkdir(dir, "p")
+  local path = dir .. "/" .. key .. ".json"
+  local f = io.open(path, "w")
+  f:write('{"globs":["*.lua",false,"*.vim"]}')
+  f:close()
+  eq({}, store.load(tmpdir .. "/badelem"))
+  -- Clean up
+  os.remove(path)
+end
+
 T["load"]["handles wrong type for globs field"] = function()
   local project = require("grepscope.project")
   local key = project.key(tmpdir .. "/wrongtype")

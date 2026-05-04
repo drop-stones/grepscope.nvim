@@ -29,6 +29,11 @@ function M.load(root)
   f:close()
   local ok, data = pcall(vim.json.decode, content)
   if ok and data and type(data.globs) == "table" then
+    for _, glob in ipairs(data.globs) do
+      if type(glob) ~= "string" then
+        return {}
+      end
+    end
     return data.globs
   end
   return {}

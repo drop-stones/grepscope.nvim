@@ -28,4 +28,12 @@ T["key()"]["handles consecutive slashes"] = function()
   eq("home%user", project.key("//home//user"))
 end
 
+T["key()"]["returns fallback for root path"] = function()
+  eq("root", project.key("/"))
+end
+
+T["key()"]["returns fallback for empty string"] = function()
+  eq("root", project.key(""))
+end
+
 return T
